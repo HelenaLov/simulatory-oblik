@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Симулятор касової зміни ПРРО</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: cashier desk — event card on the left, receipt tape and cash drawer on the right */
+:root {
+  --bg: #eef2f0; --surface: #ffffff; --ink: #16211d; --muted: #5a6964; --line: #d3dcd8;
+  --accent: #0f6b5c; --accent-soft: #dcefe9; --debit: #2453c7; --credit: #b0441c;
+  --ok: #1d7a3a; --ok-soft: #e1f3e6; --bad: #b3261e; --bad-soft: #fbe5e3; --warn-soft: #fff3d6;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --surface: #19221f; --ink: #e6eeeb; --muted: #9aaba5; --line: #2c3934;
+  --accent: #4cc2a8; --accent-soft: #173a33; --debit: #85a6ff; --credit: #ff9f78;
+  --ok: #6fd38b; --ok-soft: #173524; --bad: #ff8a80; --bad-soft: #3d1c1a; --warn-soft: #3a3118; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #19221f; --ink: #e6eeeb; --muted: #9aaba5; --line: #2c3934;
+  --accent: #4cc2a8; --accent-soft: #173a33; --debit: #85a6ff; --credit: #ff9f78;
+  --ok: #6fd38b; --ok-soft: #173524; --bad: #ff8a80; --bad-soft: #3d1c1a; --warn-soft: #3a3118; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: end; justify-content: space-between; margin-bottom: 20px }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.3rem, 2.6vw, 1.9rem); line-height: 1.2; margin: 0; text-wrap: balance }
+.sub { color: var(--muted); margin: 6px 0 0; max-width: 62ch }
+.eyebrow { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 600 }
+.setup { display: flex; flex-wrap: wrap; gap: 10px; align-items: end }
+label.fld { display: grid; gap: 4px; font-size: .8rem; color: var(--muted) }
+input, select, button { font: inherit; color: var(--ink) }
+input[type=text], input[type=number], select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-height: 40px }
+input[type=number] { width: 84px }
+input[type=text] { width: 220px; max-width: 100% }
+button { cursor: pointer; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); padding: 8px 16px; min-height: 40px; font-weight: 600 }
+button.ghost { background: transparent; color: var(--accent) }
+button:disabled { opacity: .45; cursor: not-allowed }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0 }
+.progress { display: flex; gap: 3px; margin: 0 0 16px }
+.progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--line) }
+.progress span.full { background: var(--ok) } .progress span.half { background: #d9a21b } .progress span.zero { background: var(--bad) } .progress span.cur { background: var(--accent) }
+.opmeta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: .85rem }
+.optext { font-size: 1.08rem; font-weight: 500; margin: 10px 0 6px; text-wrap: pretty }
+.amount { font-family: var(--f-mono); font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; margin: 4px 0 18px }
+.amount small { font-size: .9rem; color: var(--muted); font-weight: 400 }
+.pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+@media (max-width: 480px) { .pick { grid-template-columns: 1fr } }
+.pick label { display: grid; gap: 6px; font-weight: 600; font-size: .85rem }
+.pick .dt { color: var(--debit) } .pick .kt { color: var(--credit) }
+.pick select { width: 100%; font-size: .92rem }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px }
+.fb { margin-top: 16px; padding: 12px 14px; border-radius: 8px; border-left: 4px solid; font-size: .93rem }
+.fb.ok { background: var(--ok-soft); border-color: var(--ok) }
+.fb.bad { background: var(--bad-soft); border-color: var(--bad) }
+.fb.info { background: var(--warn-soft); border-color: #d9a21b }
+.fb b { display: block; margin-bottom: 2px }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: 1rem; margin: 0 0 10px }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .85rem }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+th { font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
+td.d { color: var(--debit); font-family: var(--f-mono) } td.k { color: var(--credit); font-family: var(--f-mono) }
+.journal { max-height: 260px; overflow-y: auto; margin-bottom: 18px }
+.empty { color: var(--muted); font-size: .9rem; padding: 10px 0 }
+.check { margin-top: 10px; font-size: .85rem; padding: 8px 10px; border-radius: 6px; background: var(--accent-soft) }
+.final { text-align: left }
+.score { font-family: var(--f-display); font-size: 2.6rem; font-weight: 700; color: var(--accent); margin: 8px 0 }
+.code { font-family: var(--f-mono); font-size: 1.3rem; background: var(--accent-soft); padding: 10px 14px; border-radius: 6px; display: inline-block; user-select: all; letter-spacing: .04em }
+details.teacher { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px }
+details.teacher summary { cursor: pointer; color: var(--muted); font-weight: 600 }
+.teacher .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 10px }
+.note { color: var(--muted); font-size: .8rem; margin-top: 14px }
+@media (prefers-reduced-motion: no-preference) { .fb { animation: in .2s ease-out } @keyframes in { from { transform: translateY(4px) } to { transform: none } } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Облік та звітність на підприємствах малого бізнесу · навчальний симулятор</div>
+      <h1>Симулятор касової зміни ПРРО</h1>
+      <p class="sub">Ви — касир ТОВ «Кав'ярня Зерно». Для кожної події зміни оберіть, який документ має сформувати програмний РРО. Наприкінці заповніть показники Z-звіту. Суми залежать від номера варіанта.</p>
+    </div>
+    <form class="setup" id="setup">
+      <label class="fld" for="fio">Прізвище та ім'я<input type="text" id="fio" placeholder="Коваленко Олена" required></label>
+      <label class="fld" for="var">Варіант N<input type="number" id="var" min="1" max="30" value="1" required></label>
+      <button type="submit" id="start">Почати зміну</button>
+    </form>
+  </header>
+  <div class="grid">
+    <section class="panel" id="work" aria-live="polite"></section>
+    <section class="panel">
+      <h2>Стрічка документів ПРРО</h2>
+      <div class="journal scroll" id="journal"></div>
+      <h2>Грошова скринька</h2>
+      <div class="scroll" id="osv"></div>
+      <div class="check" id="check"></div>
+    </section>
+  </div>
+  <details class="teacher">
+    <summary>Для викладача: перевірити код результату</summary>
+    <div class="row">
+      <label class="fld" for="tfio">Прізвище та ім'я студента<input type="text" id="tfio"></label>
+      <label class="fld" for="tcode">Код<input type="text" id="tcode" placeholder="K9-30-7QZD"></label>
+      <button type="button" class="ghost" id="tcheck">Перевірити</button>
+    </div>
+    <p id="tresult" class="note"></p>
+  </details>
+  <p class="note">Навчальний симулятор не є програмним РРО і не передає дані до ДПС. Правильна відповідь з першої спроби — 1 бал, з другої — 0,5 бала; кожен правильний показник Z-звіту — 0,5 бала. Прогрес зберігається лише у вашому браузері.</p>
+</div>
+<script>
+(function () {
+  const DOCS = ['Службове внесення', 'Фіскальний чек — оплата готівкою', 'Фіскальний чек — оплата карткою', 'Фіскальний чек — змішана оплата', 'Фіскальний чек повернення', 'X-звіт', 'Службова видача', 'Z-звіт (закриття зміни)', 'Фіскальний документ не потрібен'];
+  const fmt = x => x.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function build(n) {
+    const corp = 1500 + 20 * n;
+    const E = [
+      ['08:00', 'Відкрито зміну. Касир поклав у грошову скриньку розмінну монету 1 000 грн, отриману з основної каси за видатковим касовим ордером', 1000, 0, 'Готівка, яку вносять у скриньку не від покупця, оформлюється службовим внесенням.', 'Це не продаж, але готівка в скриньці збільшилася.', { cashIn: 1000 }],
+      ['08:20', 'Продано 2 капучино і круасан, покупець заплатив готівкою', 245, 1, 'На кожен розрахунок видається фіскальний чек із зазначенням форми оплати — готівка.', 'Звичайний продаж за готівку.', { cash: 245 }],
+      ['08:45', 'Лате з собою, покупець оплатив смартфоном (Tap to Phone)', 95, 2, 'Оплата карткою або смартфоном — теж розрахункова операція: фіскальний чек з формою оплати «картка».', 'Безготівкова оплата в точці продажу теж потребує чека.', { card: 95 }],
+      ['09:30', 'Корпоративне замовлення кави і десертів для сусіднього офісу, оплата готівкою', corp, 1, 'Фіскальний чек, оплата готівкою.', 'Хто платить — не має значення, важлива форма оплати.', { cash: corp }],
+      ['10:10', 'Покупець повертає невідкриту пачку кави в зернах, яку вчора оплатив карткою; кошти повертаються на картку', 420, 4, 'Повернення коштів покупцю оформлюється фіскальним чеком повернення (видатковим чеком).', 'Гроші повертаються покупцю — потрібен окремий вид чека.', { ret: 420 }],
+      ['11:00', 'Директор просить показати виручку на поточний момент, не закриваючи зміну', 0, 5, 'Проміжні підсумки без закриття зміни — X-звіт. Він не обнуляє лічильники.', 'Зміну не закривають.', {}],
+      ['11:40', 'Продано пачку кави в зернах, оплата карткою', 420, 2, 'Фіскальний чек, форма оплати — картка.', 'Безготівковий продаж.', { card: 420 }],
+      ['12:15', 'Кур\'єр отримав із грошової скриньки 300 грн на таксі для доставки замовлення (оформлено ВКО під звіт)', 300, 6, 'Видача готівки зі скриньки не покупцю — службова видача (паралельно бухгалтер оформлює ВКО).', 'Готівка вибуває, але це не повернення покупцю.', { cashOut: 300 }],
+      ['13:00', 'Бариста налив відвідувачу склянку води безкоштовно', 0, 8, 'Розрахунку немає — фіскальний документ не потрібен.', 'Чи були гроші?', {}],
+      ['14:20', 'Продано 3 тістечка по 85 грн, оплата готівкою', 255, 1, 'Фіскальний чек, оплата готівкою.', 'Звичайний продаж за готівку.', { cash: 255 }],
+      ['15:05', 'Покупець оплатив чек на 120 грн: 50 грн готівкою і 70 грн карткою', 120, 3, 'Один чек зі змішаною формою оплати: готівка 50 грн і картка 70 грн.', 'Один продаж — дві форми оплати.', { cash: 50, card: 70 }],
+      ['16:30', 'Інкасатор забрав частину готівкової виручки — 1 500 грн', 1500, 6, 'Вилучення готівки для здавання в банк — службова видача.', 'Готівка вибуває зі скриньки не покупцю.', { cashOut: 1500 }],
+      ['17:10', 'Клієнтка внесла готівкою передоплату 600 грн за торт, який забере завтра', 600, 1, 'Передоплата — теж розрахункова операція: чек видається в момент отримання коштів.', 'Товар ще не видано. А гроші вже отримано?', { cash: 600 }],
+      ['21:00', 'Кав\'ярня зачиняється: завершити роботу ПРРО на сьогодні', 0, 7, 'Зміну закривають Z-звітом (фіскальним звітним чеком); зміна не може тривати понад 24 години.', 'Підсумковий звіт з обнуленням лічильників.', {}],
+    ];
+    const t = { cash: 0, card: 0, ret: 0, cashIn: 0, cashOut: 0 };
+    for (const e of E) for (const k in e[6]) t[k] += e[6][k];
+    const Z = [['Продажі з оплатою готівкою, грн', t.cash], ['Продажі з оплатою карткою, грн', t.card], ['Повернення покупцям (на картку), грн', t.ret], ['Службове внесення, грн', t.cashIn], ['Службова видача, грн', t.cashOut], ['Готівка в грошовій скриньці на кінець зміни, грн', t.cashIn + t.cash - t.cashOut]];
+    return { E, Z };
+  }
+  function hash(s) { let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return (h % 1679616).toString(36).toUpperCase().padStart(4, '0'); }
+  const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const makeCode = (name, n, p2) => 'K' + n + '-' + p2 + '-' + hash('kasa|' + norm(name) + '|' + n + '|' + p2);
+  const $ = id => document.getElementById(id);
+  const KEY = 'simulator-kasa-v1';
+  let S = null, D = null;
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
+  const MAX = () => D.E.length + D.Z.length * 0.5;
+
+  function render() {
+    const w = $('work');
+    if (!S) { w.innerHTML = '<div class="eyebrow">Як працює симулятор</div><p class="optext">Введіть прізвище й номер варіанта і натисніть «Почати зміну».</p><p class="sub">Приклад: «Продано 2 капучино і круасан, покупець заплатив готівкою — 245 грн». Оберіть документ ПРРО, і симулятор пояснить, чи правильно, та покаже документ у стрічці праворуч.</p>'; return; }
+    const prog = '<div class="progress" aria-hidden="true">' + D.E.map((_, i) => { const p = S.pts[i]; return '<span class="' + (p === 1 ? 'full' : p === 0.5 ? 'half' : p === 0 ? 'zero' : i === S.idx ? 'cur' : '') + '"></span>'; }).join('') + '</div>';
+    if (S.idx < D.E.length) {
+      const e = D.E[S.idx];
+      w.innerHTML = prog + '<div class="opmeta"><span>Подія ' + (S.idx + 1) + ' з ' + D.E.length + ' · ' + e[0] + '</span><span>' + S.name + ' · варіант ' + S.n + '</span></div><p class="optext">' + e[1] + '</p>' +
+        (e[2] ? '<div class="amount">' + fmt(e[2]) + ' <small>грн</small></div>' : '<div class="amount"><small>без суми</small></div>') +
+        '<label class="fld" for="doc">Документ ПРРО<select id="doc"><option value="">— оберіть —</option>' + DOCS.map((d, i) => '<option value="' + i + '">' + d + '</option>').join('') + '</select></label>' +
+        '<div class="actions"><button type="button" id="go">Перевірити</button><button type="button" class="ghost" id="hint">Підказка</button></div><div id="fb"></div>';
+      $('go').onclick = check; $('hint').onclick = () => { $('fb').innerHTML = '<div class="fb info"><b>Підказка</b>' + e[5] + '</div>'; };
+      if ((S.tries[S.idx] || 0) === 1) $('fb').innerHTML = '<div class="fb bad"><b>Неправильно. Спробуйте ще раз — за другу спробу 0,5 бала.</b>' + e[5] + '</div>';
+      return;
+    }
+    if (!S.zDone) {
+      w.innerHTML = prog + '<div class="eyebrow">Z-звіт</div><p class="optext">Зміну закрито. Заповніть показники Z-звіту за стрічкою документів праворуч.</p>' +
+        '<div class="pick" style="grid-template-columns:1fr">' + D.Z.map((z, i) => '<label for="z' + i + '">' + z[0] + '<input type="number" step="0.01" id="z' + i + '"></label>').join('') + '</div>' +
+        '<div class="actions"><button type="button" id="zgo">Звірити Z-звіт</button></div><div id="fb"></div>';
+      $('zgo').onclick = () => {
+        let pts = 0, html = '';
+        D.Z.forEach((z, i) => { const v = parseFloat(($('z' + i).value || '').replace(',', '.')); const ok = Math.abs(v - z[1]) < 0.005; if (ok) pts += 0.5; html += '<tr><td>' + z[0] + '</td><td class="num">' + (isNaN(v) ? '—' : fmt(v)) + '</td><td class="num">' + fmt(z[1]) + '</td><td>' + (ok ? '✓' : '✗') + '</td></tr>'; });
+        S.zPts = pts; S.zDone = true; S.zTable = html; save(); render();
+      };
+      return;
+    }
+    const sum = S.pts.reduce((a, b) => a + b, 0) + S.zPts, p2 = Math.round(sum * 2), code = makeCode(S.name, S.n, p2);
+    w.innerHTML = prog + '<div class="eyebrow">Зміну завершено · варіант ' + S.n + '</div><div class="score">' + sum.toLocaleString('uk-UA') + ' / ' + MAX() + '</div>' +
+      '<div class="scroll"><table><thead><tr><th>Показник Z-звіту</th><th class="num">Ваше</th><th class="num">Правильно</th><th></th></tr></thead><tbody>' + S.zTable + '</tbody></table></div>' +
+      '<p>Ваш код результату — надішліть викладачу разом із прізвищем:</p><div class="code" id="code">' + code + '</div>' +
+      '<div class="actions"><button type="button" id="copy">Скопіювати код</button><button type="button" class="ghost" id="again">Нова зміна</button></div><p class="note" id="copied"></p>';
+    $('copy').onclick = () => { navigator.clipboard.writeText(code).then(() => { $('copied').textContent = 'Код скопійовано.'; }).catch(() => { const r = document.createRange(); r.selectNodeContents($('code')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('copied').textContent = 'Код виділено — натисніть Ctrl+C.'; }); };
+    $('again').onclick = () => start(S.name, S.n);
+  }
+
+  function check() {
+    const e = D.E[S.idx], v = $('doc').value;
+    if (v === '') { $('fb').innerHTML = '<div class="fb info"><b>Оберіть документ</b>Виберіть варіант зі списку.</div>'; return; }
+    const tries = (S.tries[S.idx] || 0) + 1; S.tries[S.idx] = tries;
+    if (+v === e[3]) finish(e, '<div class="fb ok"><b>Правильно: ' + DOCS[e[3]] + (tries === 1 ? ' (+1 бал)' : ' (+0,5 бала)') + '</b>' + e[4] + '</div>', tries === 1 ? 1 : 0.5);
+    else if (tries >= 2) finish(e, '<div class="fb bad"><b>Правильно: ' + DOCS[e[3]] + '</b>' + e[4] + '</div>', 0);
+    else { save(); render(); }
+  }
+  function finish(e, html, p) {
+    S.pts[S.idx] = p; S.log.push(S.idx); S.idx++; save(); ledger();
+    $('fb').innerHTML = html + '<div class="actions"><button type="button" id="next">' + (S.idx >= D.E.length ? 'До Z-звіту' : 'Наступна подія') + '</button></div>';
+    $('go').disabled = true; $('hint').disabled = true; $('doc').disabled = true; $('next').onclick = render; $('next').focus();
+  }
+  function ledger() {
+    if (!S || !S.log.length) { $('journal').innerHTML = '<p class="empty">Тут з\'являтимуться документи, які сформував ПРРО: час, вид документа і сума.</p>'; $('osv').innerHTML = '<p class="empty">Симулятор рахує готівку в скриньці після кожної події.</p>'; $('check').textContent = 'Готівка в скриньці: 0,00 грн'; return; }
+    $('journal').innerHTML = '<table><thead><tr><th>Час</th><th>Документ</th><th class="num">Сума</th></tr></thead><tbody>' + S.log.slice().reverse().map(i => { const e = D.E[i]; return '<tr><td>' + e[0] + '</td><td>' + DOCS[e[3]] + '</td><td class="num">' + (e[2] ? fmt(e[2]) : '—') + '</td></tr>'; }).join('') + '</tbody></table>';
+    const t = { cash: 0, card: 0, ret: 0, cashIn: 0, cashOut: 0 };
+    for (const i of S.log) for (const k in D.E[i][6]) t[k] += D.E[i][6][k];
+    $('osv').innerHTML = '<table><tbody><tr><td>Службове внесення</td><td class="num">' + fmt(t.cashIn) + '</td></tr><tr><td>Надходження готівки від покупців</td><td class="num">' + fmt(t.cash) + '</td></tr><tr><td>Службова видача</td><td class="num">' + fmt(t.cashOut) + '</td></tr></tbody></table>';
+    $('check').textContent = 'Готівка в скриньці: ' + fmt(t.cashIn + t.cash - t.cashOut) + ' грн';
+  }
+  function start(name, n) { S = { name, n, idx: 0, pts: [], tries: [], log: [], zDone: false, zPts: 0, zTable: '' }; D = build(n); save(); render(); ledger(); }
+  $('setup').addEventListener('submit', ev => { ev.preventDefault(); const name = $('fio').value.trim(), n = parseInt($('var').value, 10); if (!name || !(n >= 1 && n <= 30)) { $('work').innerHTML = '<div class="fb bad"><b>Перевірте дані</b>Введіть прізвище та ім\'я і номер варіанта від 1 до 30.</div>'; return; } start(name, n); });
+  $('tcheck').onclick = () => {
+    const name = $('tfio').value, m = ($('tcode').value || '').trim().toUpperCase().match(/^K(\d{1,2})-(\d{1,2})-([0-9A-Z]{4})$/);
+    if (!m) { $('tresult').textContent = 'Формат коду: K<варіант>-<бали×2>-<4 символи>, наприклад K9-30-7QZD.'; return; }
+    const n = +m[1], p2 = +m[2], ok = makeCode(name, n, p2) === 'K' + n + '-' + p2 + '-' + m[3];
+    $('tresult').textContent = ok ? 'Код справжній: ' + name.trim() + ', варіант ' + n + ', результат ' + (p2 / 2).toLocaleString('uk-UA') + ' з 17 балів (' + Math.round(p2 / 34 * 100) + '%).' : 'Код не відповідає цьому прізвищу. Перевірте написання прізвища і код.';
+  };
+  const sv = load(); if (sv && sv.n >= 1 && sv.n <= 30 && Array.isArray(sv.log)) { S = sv; D = build(S.n); $('fio').value = S.name; $('var').value = S.n; }
+  render(); ledger();
+})();
+</script>
+</body>
+</html>

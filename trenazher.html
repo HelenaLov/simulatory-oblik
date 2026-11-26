@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тренажер проводок «Кав'ярня Зерно»</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Layout: ledger desk — operation card on the left, live journal and turnover sheet on the right */
+:root {
+  --bg: #eef2f0; --surface: #ffffff; --ink: #16211d; --muted: #5a6964; --line: #d3dcd8;
+  --accent: #0f6b5c; --accent-soft: #dcefe9; --debit: #2453c7; --credit: #b0441c;
+  --ok: #1d7a3a; --ok-soft: #e1f3e6; --bad: #b3261e; --bad-soft: #fbe5e3; --warn-soft: #fff3d6;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --surface: #19221f; --ink: #e6eeeb; --muted: #9aaba5; --line: #2c3934;
+  --accent: #4cc2a8; --accent-soft: #173a33; --debit: #85a6ff; --credit: #ff9f78;
+  --ok: #6fd38b; --ok-soft: #173524; --bad: #ff8a80; --bad-soft: #3d1c1a; --warn-soft: #3a3118; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #19221f; --ink: #e6eeeb; --muted: #9aaba5; --line: #2c3934;
+  --accent: #4cc2a8; --accent-soft: #173a33; --debit: #85a6ff; --credit: #ff9f78;
+  --ok: #6fd38b; --ok-soft: #173524; --bad: #ff8a80; --bad-soft: #3d1c1a; --warn-soft: #3a3118; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: end; justify-content: space-between; margin-bottom: 20px }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.3rem, 2.6vw, 1.9rem); line-height: 1.2; margin: 0; text-wrap: balance }
+.sub { color: var(--muted); margin: 6px 0 0; max-width: 62ch }
+.eyebrow { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 600 }
+.setup { display: flex; flex-wrap: wrap; gap: 10px; align-items: end }
+label.fld { display: grid; gap: 4px; font-size: .8rem; color: var(--muted) }
+input, select, button { font: inherit; color: var(--ink) }
+input[type=text], input[type=number], select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-height: 40px }
+input[type=number] { width: 84px }
+input[type=text] { width: 220px; max-width: 100% }
+button { cursor: pointer; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); padding: 8px 16px; min-height: 40px; font-weight: 600 }
+button.ghost { background: transparent; color: var(--accent) }
+button:disabled { opacity: .45; cursor: not-allowed }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0 }
+.progress { display: flex; gap: 3px; margin: 0 0 16px }
+.progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--line) }
+.progress span.full { background: var(--ok) } .progress span.half { background: #d9a21b } .progress span.zero { background: var(--bad) } .progress span.cur { background: var(--accent) }
+.opmeta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: .85rem }
+.optext { font-size: 1.08rem; font-weight: 500; margin: 10px 0 6px; text-wrap: pretty }
+.amount { font-family: var(--f-mono); font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; margin: 4px 0 18px }
+.amount small { font-size: .9rem; color: var(--muted); font-weight: 400 }
+.pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+@media (max-width: 480px) { .pick { grid-template-columns: 1fr } }
+.pick label { display: grid; gap: 6px; font-weight: 600; font-size: .85rem }
+.pick .dt { color: var(--debit) } .pick .kt { color: var(--credit) }
+.pick select { width: 100%; font-size: .92rem }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px }
+.fb { margin-top: 16px; padding: 12px 14px; border-radius: 8px; border-left: 4px solid; font-size: .93rem }
+.fb.ok { background: var(--ok-soft); border-color: var(--ok) }
+.fb.bad { background: var(--bad-soft); border-color: var(--bad) }
+.fb.info { background: var(--warn-soft); border-color: #d9a21b }
+.fb b { display: block; margin-bottom: 2px }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: 1rem; margin: 0 0 10px }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .85rem }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top }
+th { font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
+td.d { color: var(--debit); font-family: var(--f-mono) } td.k { color: var(--credit); font-family: var(--f-mono) }
+.journal { max-height: 260px; overflow-y: auto; margin-bottom: 18px }
+.empty { color: var(--muted); font-size: .9rem; padding: 10px 0 }
+.check { margin-top: 10px; font-size: .85rem; padding: 8px 10px; border-radius: 6px; background: var(--accent-soft) }
+.final { text-align: left }
+.score { font-family: var(--f-display); font-size: 2.6rem; font-weight: 700; color: var(--accent); margin: 8px 0 }
+.code { font-family: var(--f-mono); font-size: 1.3rem; background: var(--accent-soft); padding: 10px 14px; border-radius: 6px; display: inline-block; user-select: all; letter-spacing: .04em }
+details.teacher { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px }
+details.teacher summary { cursor: pointer; color: var(--muted); font-weight: 600 }
+.teacher .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 10px }
+.note { color: var(--muted); font-size: .8rem; margin-top: 14px }
+@media (prefers-reduced-motion: no-preference) { .fb { animation: in .2s ease-out } @keyframes in { from { transform: translateY(4px) } to { transform: none } } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Облік та звітність на підприємствах малого бізнесу · навчальний симулятор</div>
+      <h1>Тренажер проводок «Кав'ярня Зерно»</h1>
+      <p class="sub">ТОВ «Кав'ярня Зерно» — мікропідприємство на єдиному податку 3 групи (5% + ВЗ 1%), листопад 2026 року. Оберіть Дт і Кт для 25 операцій за спрощеним планом рахунків. Суми залежать від вашого номера за списком.</p>
+    </div>
+    <form class="setup" id="setup">
+      <label class="fld" for="fio">Прізвище та ім'я<input type="text" id="fio" placeholder="Коваленко Олена" required></label>
+      <label class="fld" for="var">Варіант N<input type="number" id="var" min="1" max="30" value="1" required></label>
+      <button type="submit" id="start">Почати</button>
+    </form>
+  </header>
+
+  <div class="grid">
+    <section class="panel" id="work" aria-live="polite"></section>
+    <section class="panel">
+      <h2>Журнал проводок</h2>
+      <div class="journal scroll" id="journal"></div>
+      <h2>Обороти за рахунками</h2>
+      <div class="scroll" id="osv"></div>
+      <div class="check" id="check"></div>
+    </section>
+  </div>
+
+  <details class="teacher">
+    <summary>Для викладача: перевірити код результату</summary>
+    <div class="row">
+      <label class="fld" for="tfio">Прізвище та ім'я студента<input type="text" id="tfio"></label>
+      <label class="fld" for="tcode">Код<input type="text" id="tcode" placeholder="N9-44-K3QZ"></label>
+      <button type="button" class="ghost" id="tcheck">Перевірити</button>
+    </div>
+    <p id="tresult" class="note"></p>
+  </details>
+  <p class="note">Навчальний тренажер не є обліковою програмою. Правила: правильна відповідь з першої спроби — 1 бал, з другої — 0,5 бала, після двох помилок тренажер показує правильну проводку (0 балів). Прогрес зберігається лише у вашому браузері.</p>
+</div>
+
+<script>
+(function () {
+  const ACC = [[10,'Основні засоби'],[13,'Знос необоротних активів'],[14,'Довгострокові фінансові інвестиції'],[15,'Капітальні інвестиції'],[16,'Довгострокові біологічні активи'],[18,'Інші необоротні активи'],
+    [20,'Виробничі запаси'],[21,'Поточні біологічні активи'],[23,'Виробництво'],[26,'Готова продукція та товари'],[30,'Готівка'],[31,'Рахунки в банках'],[35,'Поточні фінансові інвестиції'],
+    [37,'Розрахунки з різними дебіторами'],[39,'Витрати майбутніх періодів'],[40,'Власний капітал'],[44,'Нерозподілені прибутки (непокриті збитки)'],[47,'Забезпечення майбутніх витрат і платежів'],
+    [48,'Цільове фінансування'],[55,'Інші довгострокові зобов\'язання'],[64,'Розрахунки за податками й платежами'],[66,'Розрахунки з оплати праці'],[68,'Розрахунки за іншими операціями'],
+    [69,'Доходи майбутніх періодів'],[70,'Доходи від реалізації'],[74,'Інші доходи'],[79,'Фінансові результати'],[90,'Собівартість реалізації'],[91,'Загальновиробничі витрати'],[97,'Інші витрати']];
+  const NAME = Object.fromEntries(ACC);
+  const CLS = { 1:'Клас 1. Необоротні активи', 2:'Клас 2. Запаси', 3:'Клас 3. Кошти і розрахунки', 4:'Клас 4. Власний капітал', 5:'Клас 5. Довгострокові зобов\'язання', 6:'Клас 6. Поточні зобов\'язання', 7:'Клас 7. Доходи і результати', 9:'Клас 9. Витрати' };
+  const r2 = x => Math.round((x + 1e-9) * 100) / 100;
+  const fmt = x => x.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function buildOps(n) {
+    const o = [];
+    const add = (doc, text, amt, dt, kt, why, hint) => o.push({ doc, text, amt: r2(amt), dt, kt, why, hint });
+    const raw = 18000 + 300 * n, goods = 9000 + 200 * n, cash = 42000 + 800 * n, card = 58000 + 1200 * n;
+    const com = r2(card * 0.013), inc = 38000 + 700 * n, used = 16000 + 250 * n, sb = 24000 + 400 * n, sa = 12000;
+    const esvB = r2(sb * 0.22), esvA = r2(sa * 0.22), wh = r2((sb + sa) * 0.18) + r2((sb + sa) * 0.05);
+    const pay = r2(sb + sa - wh), prod = r2(used + sb + esvB), cogs = 7000 + 150 * n, rent = 30000, am = 2500 + 40 * n, adv = 10000 + 200 * n;
+    const base = cash + card + adv, ep = r2(base * 0.05) + r2(base * 0.01);
+    const rev = cash + card, cost = r2(prod + cogs), oth = r2(com + sa + esvA + rent + am + ep), res = r2(rev - cost - oth);
+    add('Видаткова накладна', 'Отримано від постачальника каву в зернах, молоко і сиропи для приготування напоїв', raw, 20, 68, 'Сировина для приготування напоїв — виробничі запаси (Дт 20); борг перед постачальником — Кт 68.', 'Сировина — це запаси. Розрахунки з постачальниками у спрощеному плані ведуть на рахунку 68.');
+    add('Банківська виписка', 'Оплачено постачальнику сировини з поточного рахунку', raw, 68, 31, 'Погашено заборгованість перед постачальником (Дт 68) коштами з поточного рахунку (Кт 31).', 'Зменшується зобов\'язання і зменшуються кошти в банку.');
+    add('Видаткова накладна', 'Отримано від кондитерської десерти для перепродажу', goods, 26, 68, 'Десерти, куплені для перепродажу, — товари (Дт 26), заборгованість перед постачальником — Кт 68.', 'Товари для перепродажу не переробляються — це не сировина.');
+    add('Z-звіт ПРРО', 'Продано напої і десерти за готівку (фіскальні чеки ПРРО)', cash, 30, 70, 'Готівка надійшла в касу (Дт 30), визнано дохід від реалізації (Кт 70).', 'Куди надійшли гроші і що виникло — дохід чи зобов\'язання?');
+    add('Звіт еквайра, виписка', 'Продано напої за платіжними картками (еквайринг), кошти зараховано на поточний рахунок', card, 31, 70, 'Кошти від продажу карткою — на рахунок у банку (Дт 31), дохід від реалізації — Кт 70.', 'Оплата карткою — це безготівкові кошти.');
+    add('Банківська виписка', 'Банк утримав комісію за еквайринг 1,3% від оплат карткою', com, 97, 31, 'Комісія банку — інші витрати підприємства (Дт 97), кошти списано з рахунку (Кт 31). Комісію не віднімають від доходу.', 'Комісія — це витрата, а не зменшення доходу.');
+    add('ВКО, квитанція банку', 'Здано готівкову виручку з каси на поточний рахунок', inc, 31, 30, 'Гроші перемістилися з каси (Кт 30) на рахунок у банку (Дт 31); доходу чи витрат не виникає.', 'Це внутрішнє переміщення коштів.');
+    add('Акт списання сировини', 'Списано каву, молоко і сиропи, використані для приготування напоїв', used, 23, 20, 'Приготування напоїв — це виробництво: сировину списують на рахунок 23 (Дт 23 Кт 20).', 'Кав\'ярня сама виготовляє напої. Де накопичують витрати виробництва?');
+    add('Розрахунково-платіжна відомість', 'Нараховано заробітну плату баристам', sb, 23, 66, 'Зарплата баристів — пряма витрата на приготування напоїв (Дт 23), зобов\'язання перед працівниками — Кт 66.', 'Баристи безпосередньо виготовляють продукцію.');
+    add('Бухгалтерська довідка', 'Нараховано ЄСВ 22% на зарплату баристів', esvB, 23, 64, 'ЄСВ на зарплату виробничого персоналу — витрати виробництва (Дт 23), зобов\'язання зі сплати — Кт 64.', 'ЄСВ йде туди ж, куди й зарплата, з якої його нараховано.');
+    add('Розрахунково-платіжна відомість', 'Нараховано заробітну плату адміністратору кав\'ярні', sa, 97, 66, 'Зарплата адміністративного персоналу — інші витрати (Дт 97), Кт 66.', 'Адміністратор не виготовляє напоїв.');
+    add('Бухгалтерська довідка', 'Нараховано ЄСВ 22% на зарплату адміністратора', esvA, 97, 64, 'ЄСВ на зарплату адміністратора — Дт 97 Кт 64.', 'Аналогічно до попередньої операції з ЄСВ.');
+    add('Розрахунково-платіжна відомість', 'Утримано із заробітної плати ПДФО 18% і військовий збір 5%', wh, 66, 64, 'Утримання зменшують заборгованість перед працівниками (Дт 66) і збільшують заборгованість перед бюджетом (Кт 64). Це не витрати підприємства.', 'Хто «платить» утримані податки — підприємство чи працівник?');
+    add('Банківська виписка', 'Виплачено заробітну плату працівникам з поточного рахунку', pay, 66, 31, 'Погашено заборгованість із зарплати (Дт 66) коштами з рахунку (Кт 31).', 'Зменшуються зобов\'язання і кошти.');
+    add('Бухгалтерська довідка', 'Списано виробничу собівартість приготованих і проданих напоїв (сировина, зарплата і ЄСВ баристів)', prod, 90, 23, 'Накопичені на рахунку 23 витрати списують на собівартість реалізації: Дт 90 Кт 23.', 'Рахунок 23 закривається на собівартість.');
+    add('Бухгалтерська довідка', 'Списано собівартість проданих десертів (товарів)', cogs, 90, 26, 'Собівартість проданих товарів — Дт 90 Кт 26.', 'Товари вибули — на який рахунок витрат?');
+    add('Рахунок орендодавця, акт', 'Нараховано орендну плату за приміщення кав\'ярні за листопад', rent, 97, 68, 'Оренда — інші витрати (Дт 97), заборгованість перед орендодавцем — Кт 68.', 'Оренда приміщення залу — не виробнича собівартість у цьому прикладі.');
+    add('Відомість амортизації', 'Нараховано амортизацію кавомашини і меблів', am, 97, 13, 'Амортизацію відображають за дебетом рахунку витрат (Дт 97) і кредитом рахунку зносу (Кт 13).', 'Знос накопичується на регулюючому рахунку.');
+    add('Банківська виписка', 'Отримано від компанії передоплату за кейтеринг корпоративу, який відбудеться в грудні', adv, 31, 68, 'Аванс отриманий — не дохід, а зобов\'язання: Дт 31 Кт 68.', 'Послугу ще не надано. Чи є це доходом?');
+    add('ВКО', 'Видано з каси під звіт адміністратору на придбання дрібного інвентарю', 2000, 37, 30, 'Підзвітні суми — дебіторська заборгованість працівника (Дт 37), Кт 30.', 'Працівник має звітувати — він став дебітором.');
+    add('Бухгалтерська довідка', 'Нараховано єдиний податок 5% і військовий збір 1% з коштів, що надійшли (операції 4, 5 і 19)', ep, 97, 64, 'Для юрособи-єдинника податок — інші витрати (Дт 97 Кт 64). База — касовий метод, тому передоплата з операції 19 входить до бази.', 'Податок підприємства відображають як витрати.');
+    add('Бухгалтерська довідка', 'Закрито рахунок доходів від реалізації на фінансовий результат', rev, 70, 79, 'Доходи закривають дебетом рахунку 70 у кредит рахунку 79.', 'Рахунок 70 пасивний: щоб його обнулити, записують по дебету.');
+    add('Бухгалтерська довідка', 'Закрито рахунок собівартості реалізації на фінансовий результат', cost, 79, 90, 'Витрати списують у дебет рахунку 79: Дт 79 Кт 90.', 'Рахунок 90 активний: щоб його обнулити, записують по кредиту.');
+    add('Бухгалтерська довідка', 'Закрито рахунок інших витрат на фінансовий результат', oth, 79, 97, 'Дт 79 Кт 97.', 'Як і собівартість.');
+    const profit = res >= 0;
+    add('Бухгалтерська довідка', 'Визначено і списано фінансовий результат за листопад (' + (profit ? 'порівняйте доходи і витрати на рахунку 79' : 'порівняйте доходи і витрати на рахунку 79') + ')', Math.abs(res), profit ? 79 : 44, profit ? 44 : 79,
+      profit ? 'Кредитовий оборот 79 більший за дебетовий — прибуток: Дт 79 Кт 44.' : 'Дебетовий оборот 79 більший за кредитовий — збиток: Дт 44 Кт 79.',
+      'Порівняйте суму операції 22 із сумою операцій 23 і 24.');
+    return { ops: o, res };
+  }
+
+  function hash(s) { let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return (h % 1679616).toString(36).toUpperCase().padStart(4, '0'); }
+  const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const makeCode = (name, n, p2) => 'N' + n + '-' + p2 + '-' + hash(norm(name) + '|' + n + '|' + p2);
+
+  const $ = id => document.getElementById(id);
+  let S = null, data = null;
+  const KEY = 'trenazher-zerno-v1';
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+
+  function options(sel) {
+    let h = '<option value="">— оберіть —</option>', cur = null;
+    for (const [a, nm] of ACC) { const c = Math.floor(a / 10); if (c !== cur) { if (cur !== null) h += '</optgroup>'; h += '<optgroup label="' + CLS[c] + '">'; cur = c; } h += '<option value="' + a + '"' + (sel == a ? ' selected' : '') + '>' + a + ' ' + nm + '</option>'; }
+    return h + '</optgroup>';
+  }
+
+  function renderWork() {
+    const w = $('work');
+    if (!S) { w.innerHTML = '<div class="eyebrow">Як працює тренажер</div><p class="optext">Введіть прізвище й номер варіанта і натисніть «Почати».</p><p class="sub">Приклад першої операції варіанта 1: «Отримано від постачальника каву, молоко і сиропи» — 18 300,00 грн. Ви обираєте Дт і Кт, а тренажер одразу пояснює, чи правильна проводка, і додає її до журналу праворуч.</p>'; return; }
+    const total = data.ops.length;
+    let prog = '<div class="progress" aria-hidden="true">' + data.ops.map((_, i) => { const p = S.pts[i]; const c = p === 1 ? 'full' : p === 0.5 ? 'half' : p === 0 ? 'zero' : (i === S.idx ? 'cur' : ''); return '<span class="' + c + '"></span>'; }).join('') + '</div>';
+    if (S.idx >= total) {
+      const sum = S.pts.reduce((a, b) => a + b, 0), p2 = Math.round(sum * 2), code = makeCode(S.name, S.n, p2);
+      w.innerHTML = prog + '<div class="final"><div class="eyebrow">Тренажер завершено · варіант ' + S.n + '</div><div class="score">' + sum.toLocaleString('uk-UA') + ' / ' + total + '</div>' +
+        '<p>' + Math.round(sum / total * 100) + '% правильних проводок. Фінансовий результат за листопад: <b>' + fmt(data.res) + ' грн</b> (' + (data.res >= 0 ? 'прибуток' : 'збиток') + ').</p>' +
+        '<p>Ваш код результату — надішліть його викладачу разом із прізвищем:</p><div class="code" id="code">' + code + '</div>' +
+        '<div class="actions"><button type="button" id="copy">Скопіювати код</button><button type="button" class="ghost" id="again">Пройти ще раз</button></div><p class="note" id="copied"></p></div>';
+      $('copy').onclick = () => { navigator.clipboard.writeText(code).then(() => { $('copied').textContent = 'Код скопійовано.'; }).catch(() => { const r = document.createRange(); r.selectNodeContents($('code')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('copied').textContent = 'Код виділено — натисніть Ctrl+C.'; }); };
+      $('again').onclick = () => start(S.name, S.n);
+      return;
+    }
+    const op = data.ops[S.idx], tries = S.tries[S.idx] || 0;
+    w.innerHTML = prog + '<div class="opmeta"><span>Операція ' + (S.idx + 1) + ' з ' + total + ' · ' + op.doc + '</span><span>' + S.name + ' · варіант ' + S.n + '</span></div>' +
+      '<p class="optext">' + op.text + '</p><div class="amount">' + fmt(op.amt) + ' <small>грн</small></div>' +
+      '<div class="pick"><label class="dt" for="dt">Дебет<select id="dt">' + options() + '</select></label><label class="kt" for="kt">Кредит<select id="kt">' + options() + '</select></label></div>' +
+      '<div class="actions"><button type="button" id="go">Перевірити</button><button type="button" class="ghost" id="hint">Підказка</button></div><div id="fb"></div>';
+    $('go').onclick = check;
+    $('hint').onclick = () => { $('fb').innerHTML = '<div class="fb info"><b>Підказка</b>' + op.hint + '</div>'; };
+    if (tries === 1) $('fb').innerHTML = '<div class="fb bad"><b>Неправильно. Спробуйте ще раз — за другу спробу 0,5 бала.</b>' + op.hint + '</div>';
+  }
+
+  function check() {
+    const op = data.ops[S.idx], dt = +$('dt').value, kt = +$('kt').value;
+    if (!dt || !kt) { $('fb').innerHTML = '<div class="fb info"><b>Оберіть обидва рахунки</b>Потрібно вказати рахунок за дебетом і рахунок за кредитом.</div>'; return; }
+    const tries = (S.tries[S.idx] || 0) + 1; S.tries[S.idx] = tries;
+    if (dt === op.dt && kt === op.kt) {
+      S.pts[S.idx] = tries === 1 ? 1 : 0.5; done(op, '<div class="fb ok"><b>Правильно: Дт ' + op.dt + ' Кт ' + op.kt + (tries === 1 ? ' (+1 бал)' : ' (+0,5 бала)') + '</b>' + op.why + '</div>');
+    } else if (tries >= 2) {
+      S.pts[S.idx] = 0; done(op, '<div class="fb bad"><b>Правильна проводка: Дт ' + op.dt + ' ' + NAME[op.dt] + ' / Кт ' + op.kt + ' ' + NAME[op.kt] + '</b>' + op.why + '</div>');
+    } else { save(); renderWork(); }
+  }
+
+  function done(op, html) {
+    S.post.push(S.idx); S.idx++; save(); renderLedger();
+    const fb = html + '<div class="actions"><button type="button" id="next">' + (S.idx >= data.ops.length ? 'Завершити' : 'Наступна операція') + '</button></div>';
+    $('fb').innerHTML = fb; $('go').disabled = true; $('hint').disabled = true; $('dt').disabled = true; $('kt').disabled = true;
+    $('next').onclick = renderWork; $('next').focus();
+  }
+
+  function renderLedger() {
+    if (!S || !S.post.length) { $('journal').innerHTML = '<p class="empty">Тут з\'являтимуться ваші підтверджені проводки: номер операції, Дт, Кт і сума.</p>'; $('osv').innerHTML = '<p class="empty">Обороти за дебетом і кредитом кожного рахунку рахуються автоматично.</p>'; $('check').textContent = 'Контроль: оборот Дт = оборот Кт = 0,00 грн'; return; }
+    const rows = S.post.map(i => { const o = data.ops[i]; return '<tr><td>' + (i + 1) + '</td><td class="d">' + o.dt + '</td><td class="k">' + o.kt + '</td><td class="num">' + fmt(o.amt) + '</td></tr>'; }).reverse().join('');
+    $('journal').innerHTML = '<table><thead><tr><th>№</th><th>Дт</th><th>Кт</th><th class="num">Сума, грн</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    const t = {}; let sd = 0, sk = 0;
+    for (const i of S.post) { const o = data.ops[i]; (t[o.dt] = t[o.dt] || [0, 0])[0] += o.amt; (t[o.kt] = t[o.kt] || [0, 0])[1] += o.amt; sd += o.amt; sk += o.amt; }
+    const acc = Object.keys(t).map(Number).sort((a, b) => a - b);
+    $('osv').innerHTML = '<table><thead><tr><th>Рахунок</th><th class="num">Оборот Дт</th><th class="num">Оборот Кт</th></tr></thead><tbody>' +
+      acc.map(a => '<tr><td>' + a + ' ' + NAME[a] + '</td><td class="num">' + (t[a][0] ? fmt(r2(t[a][0])) : '—') + '</td><td class="num">' + (t[a][1] ? fmt(r2(t[a][1])) : '—') + '</td></tr>').join('') + '</tbody></table>';
+    $('check').textContent = 'Контроль: оборот Дт ' + fmt(r2(sd)) + ' = оборот Кт ' + fmt(r2(sk)) + ' грн';
+  }
+
+  function start(name, n) {
+    S = { name, n, idx: 0, pts: [], tries: [], post: [] }; data = buildOps(n); save(); renderWork(); renderLedger();
+  }
+
+  $('setup').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = $('fio').value.trim(), n = parseInt($('var').value, 10);
+    if (!name || !(n >= 1 && n <= 30)) { $('work').innerHTML = '<div class="fb bad"><b>Перевірте дані</b>Введіть прізвище та ім\'я і номер варіанта від 1 до 30.</div>'; return; }
+    start(name, n);
+  });
+
+  $('tcheck').onclick = () => {
+    const name = $('tfio').value, m = ($('tcode').value || '').trim().toUpperCase().match(/^N(\d{1,2})-(\d{1,2})-([0-9A-Z]{4})$/);
+    if (!m) { $('tresult').textContent = 'Формат коду: N<варіант>-<бали×2>-<4 символи>, наприклад N9-44-K3QZ.'; return; }
+    const n = +m[1], p2 = +m[2], ok = makeCode(name, n, p2) === 'N' + n + '-' + p2 + '-' + m[3];
+    $('tresult').textContent = ok ? 'Код справжній: ' + name.trim() + ', варіант ' + n + ', результат ' + (p2 / 2).toLocaleString('uk-UA') + ' з 25 балів (' + Math.round(p2 / 50 * 100) + '%).' : 'Код не відповідає цьому прізвищу. Перевірте написання прізвища (як вводив студент) і код.';
+  };
+
+  const saved = load();
+  if (saved && saved.n >= 1 && saved.n <= 30 && Array.isArray(saved.post)) { S = saved; data = buildOps(S.n); $('fio').value = S.name; $('var').value = S.n; }
+  renderWork(); renderLedger();
+})();
+</script>
+</body>
+</html>
